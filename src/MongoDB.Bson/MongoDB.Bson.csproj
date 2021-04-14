@@ -47,6 +47,8 @@
 
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyVersion>2.12.1.0</AssemblyVersion>
+    <FileVersion>2.12.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

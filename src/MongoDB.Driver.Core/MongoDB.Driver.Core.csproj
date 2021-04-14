@@ -100,6 +100,8 @@
 
   <PropertyGroup>
     <ZstdBinaries>Core/Compression/Zstandard/lib/win</ZstdBinaries>
+    <AssemblyVersion>2.12.1.0</AssemblyVersion>
+    <FileVersion>2.12.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup Condition=" '$(IsWindows)' == true ">

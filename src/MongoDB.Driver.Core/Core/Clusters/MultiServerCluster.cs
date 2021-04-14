@@ -119,13 +119,16 @@ namespace MongoDB.Driver.Core.Clusters
                     _monitorServersCancellationTokenSource.Cancel();
                     _monitorServersCancellationTokenSource.Dispose();
                     var clusterDescription = Description;
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Dispose REQUEST _serversLock");
                     lock (_serversLock)
                     {
+                        ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Dispose AQUIRED _serversLock");
                         foreach (var server in _servers.ToList())
                         {
                             RemoveServer(clusterDescription, server.EndPoint, "The cluster is closing.");
                         }
                     }
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Dispose RELEASED _serversLock");
                     stopwatch.Stop();
                 }
             }
@@ -151,8 +154,10 @@ namespace MongoDB.Driver.Core.Clusters
                 var stopwatch = Stopwatch.StartNew();
 
                 var newServers = new List<IClusterableServer>();
+                ConsoleWriter.WriteLine ($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise REQUEST _updateClusterDescriptionLock");
                 lock (_updateClusterDescriptionLock)
                 {
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise ACQUIRED _updateClusterDescriptionLock");
                     // We lock here even though AddServer locks. Monitors
                     // are re-entrant such that this won't cause problems,
                     // but could prevent issues of conflicting reports
@@ -160,20 +165,23 @@ namespace MongoDB.Driver.Core.Clusters
                     var clusterDescription = Description.WithType(Settings.GetInitialClusterType());
                     if (Settings.Scheme != ConnectionStringScheme.MongoDBPlusSrv)
                     {
+                        ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise REQUEST _serversLock");
                         lock (_serversLock)
                         {
+                            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise AQUIRED _serversLock");
                             foreach (var endPoint in Settings.EndPoints)
                             {
                                 clusterDescription = EnsureServer(clusterDescription, endPoint, newServers);
                             }
                         }
+                        ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise RELEASED _serversLock");
                     }
 
                     stopwatch.Stop();
 
                     UpdateClusterDescription(clusterDescription);
                 }
-
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: Initialise RELEASED _updateClusterDescriptionLock");
                 foreach (var server in newServers)
                 {
                     server.Initialize();
@@ -238,10 +246,13 @@ namespace MongoDB.Driver.Core.Clusters
         protected override void RequestHeartbeat()
         {
             List<IClusterableServer> servers;
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RequestHeartbeat REQUEST _serversLock");
             lock (_serversLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RequestHeartbeat AQUIRED _serversLock");
                 servers = _servers.ToList();
             }
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RequestHeartbeat RELEASED _serversLock");
 
             foreach (var server in servers)
             {
@@ -295,8 +306,10 @@ namespace MongoDB.Driver.Core.Clusters
         private void ProcessServerDescriptionChanged(ServerDescriptionChangedEventArgs args)
         {
             var newServers = new List<IClusterableServer>();
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessServerDescriptionChanged REQUEST _updateClusterDescriptionLock");
             lock (_updateClusterDescriptionLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessServerDescriptionChanged ACQUIRED _updateClusterDescriptionLock");
                 var newServerDescription = args.NewServerDescription;
                 var newClusterDescription = Description;
 
@@ -351,7 +364,7 @@ namespace MongoDB.Driver.Core.Clusters
                 var shouldClusterDescriptionChangedEventBePublished = !args.OldServerDescription.SdamEquals(args.NewServerDescription);
                 UpdateClusterDescription(newClusterDescription, shouldClusterDescriptionChangedEventBePublished);
             }
-
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessServerDescriptionChanged RELEASED _updateClusterDescriptionLock");
             foreach (var server in newServers)
             {
                 server.Initialize();
@@ -405,8 +418,10 @@ namespace MongoDB.Driver.Core.Clusters
                         if (isReportedPrimaryStale && args.NewServerDescription.ElectionId != null)
                         {
                             // we only invalidate the "newly" reported stale primary if electionId was used.
+                            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange A REQUEST _serversLock");
                             lock (_serversLock)
                             {
+                                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange A ACQUIRED _serversLock");
                                 var server = _servers.SingleOrDefault(x => EndPointHelper.Equals(args.NewServerDescription.EndPoint, x.EndPoint));
                                 server.Invalidate("ReportedPrimaryIsStale", args.NewServerDescription.TopologyVersion);
 
@@ -423,9 +438,13 @@ namespace MongoDB.Driver.Core.Clusters
                                         _maxElectionInfo.SetVersion,
                                         _maxElectionInfo.ElectionId)));
 
+                                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange A RELEASING _serversLock via return");
+
                                 return clusterDescription.WithServerDescription(
                                     new ServerDescription(server.ServerId, server.EndPoint, "ReportedPrimaryIsStale"));
                             }
+
+
                         }
                     }
 
@@ -506,8 +525,10 @@ namespace MongoDB.Driver.Core.Clusters
 
                 if (currentPrimaryEndPoints.Count > 0)
                 {
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange B REQUEST _serversLock");
                     lock (_serversLock)
                     {
+                        ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange B ACQUIRED _serversLock");
                         var currentPrimaries = _servers.Where(x => EndPointHelper.Contains(currentPrimaryEndPoints, x.EndPoint));
                         foreach (var currentPrimary in currentPrimaries)
                         {
@@ -518,6 +539,7 @@ namespace MongoDB.Driver.Core.Clusters
                                 new ServerDescription(currentPrimary.ServerId, currentPrimary.EndPoint, "NoLongerPrimary"));
                         }
                     }
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessReplicaSetChange B RELEASED _serversLock");
                 }
             }
 
@@ -559,11 +581,14 @@ namespace MongoDB.Driver.Core.Clusters
 
         void IDnsMonitoringCluster.ProcessDnsException(Exception exception)
         {
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsException REQUEST _updateClusterDescriptionLock");
             lock (_updateClusterDescriptionLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsException ACQUIRED _updateClusterDescriptionLock");
                 var newClusterDescription = Description.WithDnsMonitorException(exception);
                 UpdateClusterDescription(newClusterDescription);
             }
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsException RELEASED _updateClusterDescriptionLock");
         }
 
         void IDnsMonitoringCluster.ProcessDnsResults(List<DnsEndPoint> dnsEndPoints)
@@ -578,8 +603,10 @@ namespace MongoDB.Driver.Core.Clusters
             // 2. This method has been called the first time.
             // Otherwise, the below code should not be called.
             var newServers = new List<IClusterableServer>();
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsResults REQUEST _updateClusterDescriptionLock");
             lock (_updateClusterDescriptionLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsResults ACQUIRED _updateClusterDescriptionLock");
                 var oldClusterDescription = Description;
 
                 var newClusterDescription = oldClusterDescription;
@@ -600,7 +627,7 @@ namespace MongoDB.Driver.Core.Clusters
                 newClusterDescription = newClusterDescription.WithDnsMonitorException(null);
                 UpdateClusterDescription(newClusterDescription);
             }
-
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: ProcessDnsResults RELEASED _updateClusterDescriptionLock");
             foreach (var addedServer in newServers)
             {
                 addedServer.Initialize();
@@ -622,10 +649,13 @@ namespace MongoDB.Driver.Core.Clusters
 
             IClusterableServer server;
             Stopwatch stopwatch = new Stopwatch();
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: EnsureServer REQUEST _serversLock");
             lock (_serversLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: EnsureServer ACQUIRED _serversLock");
                 if (_servers.Any(n => EndPointHelper.Equals(n.EndPoint, endPoint)))
                 {
+                    ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: EnsureServer RELEASING _serversLock via return");
                     return clusterDescription;
                 }
 
@@ -640,6 +670,7 @@ namespace MongoDB.Driver.Core.Clusters
                 _servers.Add(server);
                 newServers.Add(server);
             }
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: EnsureServer RELEASED _serversLock");
 
             clusterDescription = clusterDescription.WithServerDescription(server.Description);
             stopwatch.Stop();
@@ -680,8 +711,10 @@ namespace MongoDB.Driver.Core.Clusters
         {
             IClusterableServer server;
             var stopwatch = new Stopwatch();
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RemoveServer REQUEST _serversLock");
             lock (_serversLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RemoveServer ACQUIRED _serversLock");
                 server = _servers.SingleOrDefault(x => EndPointHelper.Equals(x.EndPoint, endPoint));
                 if (server == null)
                 {
@@ -696,6 +729,7 @@ namespace MongoDB.Driver.Core.Clusters
                 stopwatch.Start();
                 _servers.Remove(server);
             }
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: RemoveServer RELEASED _serversLock");
 
             server.DescriptionChanged -= ServerDescriptionChangedHandler;
             server.Dispose();
@@ -711,11 +745,16 @@ namespace MongoDB.Driver.Core.Clusters
 
         protected override bool TryGetServer(EndPoint endPoint, out IClusterableServer server)
         {
+            ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: TryGetServer REQUEST _serversLock");
             lock (_serversLock)
             {
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: TryGetServer ACQUIRED _serversLock");
                 server = _servers.FirstOrDefault(s => EndPointHelper.Equals(s.EndPoint, endPoint));
+
+                ConsoleWriter.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}]MultiServerCluster: TryGetServer RELEASING _serversLock via return");
                 return server != null;
             }
+
         }
 
         private void ThrowIfDisposed()
